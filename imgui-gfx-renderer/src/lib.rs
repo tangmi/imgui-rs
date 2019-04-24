@@ -128,8 +128,8 @@ impl Shaders {
                 include_bytes!("shader/glsles_300.frag"),
             ),
             HlslSm40 => (
-                include_bytes!("data/pixel.fx"),
                 include_bytes!("data/vertex.fx"),
+                include_bytes!("data/pixel.fx"),
             ),
         }
     }
