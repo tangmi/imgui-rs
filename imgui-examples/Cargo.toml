@@ -10,8 +10,8 @@ license = "MIT/Apache-2.0"
 publish = false
 
 [features]
-opengl = ["imgui-gfx-renderer/opengl"]
-directx = ["imgui-gfx-renderer/directx"]
+opengl = []
+directx = []
 default = ["opengl"]
 
 [dev-dependencies]

@@ -1,6 +1,9 @@
 #version 400
 
-uniform mat4 matrix;
+uniform Constants
+{
+  mat4 transform;
+};
 
 in vec2 pos;
 in vec2 uv;
@@ -15,5 +18,5 @@ out vec4 f_color;
 void main() {
   f_uv = uv;
   f_color = col;
-  gl_Position = matrix * vec4(pos.xy, 0, 1);
+  gl_Position = transform * vec4(pos.xy, 0, 1);
 }

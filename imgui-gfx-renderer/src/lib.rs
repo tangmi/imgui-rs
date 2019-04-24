@@ -1,3 +1,5 @@
+use gfx::gfx_constant_struct_meta;
+use gfx::gfx_impl_struct_meta;
 use gfx::handle::{Buffer, RenderTargetView};
 use gfx::memory::Bind;
 use gfx::pso::{PipelineData, PipelineState};
@@ -76,41 +78,17 @@ macro_rules! extended_defines {
     }
 }
 
-#[cfg(feature = "directx")]
-mod constants {
-    use gfx::gfx_constant_struct_meta;
-    use gfx::gfx_impl_struct_meta;
-
-    gfx::gfx_constant_struct! {
-        Constants {
-            // `matrix` is a reserved keyword in HLSL
-            matrix: [[f32; 4]; 4] = "matrix_",
-        }
+gfx::gfx_constant_struct! {
+    Constants {
+        // `matrix` is a reserved keyword in HLSL
+        matrix: [[f32; 4]; 4] = "transform",
     }
 }
 
-// This version of `pipe` uses a single uniform for `matrix`, used in GLSL shaders
-#[cfg(not(feature = "directx"))]
 extended_defines! {
     pipeline pipe {
         vertex_buffer: gfx::VertexBuffer<ImDrawVert> = (),
-        matrix: gfx::Global<[[f32; 4]; 4]> = "matrix",
-        tex: gfx::TextureSampler<[f32; 4]> = "tex",
-        out: gfx::BlendTarget<gfx::format::Rgba8> = (
-            "Target0",
-            gfx::state::ColorMask::all(),
-            gfx::preset::blend::ALPHA,
-        ),
-        scissor: gfx::Scissor = (),
-    }
-}
-
-// This version of `pipe` uses a constant buffer containing `matrix`, used in the HLSL shader
-#[cfg(feature = "directx")]
-extended_defines! {
-    pipeline pipe {
-        vertex_buffer: gfx::VertexBuffer<ImDrawVert> = (),
-        constants: gfx::ConstantBuffer<constants::Constants> = "Constants",
+        constants: gfx::ConstantBuffer<Constants> = "Constants",
         tex: gfx::TextureSampler<[f32; 4]> = "tex",
         out: gfx::BlendTarget<gfx::format::Rgba8> = (
             "Target0",
@@ -127,14 +105,8 @@ pub enum Shaders {
     GlSl400,
     /// OpenGL 3.2+
     GlSl150,
-    /// OpenGL 3.0+
-    GlSl130,
-    /// OpenGL 2.0+
-    GlSl110,
     /// OpenGL ES 3.0+
     GlSlEs300,
-    /// OpenGL ES 2.0+
-    GlSlEs100,
     /// HLSL Shader Model 4.0+
     HlslSm40,
 }
@@ -151,21 +123,9 @@ impl Shaders {
                 include_bytes!("shader/glsl_150.vert"),
                 include_bytes!("shader/glsl_150.frag"),
             ),
-            GlSl130 => (
-                include_bytes!("shader/glsl_130.vert"),
-                include_bytes!("shader/glsl_130.frag"),
-            ),
-            GlSl110 => (
-                include_bytes!("shader/glsl_110.vert"),
-                include_bytes!("shader/glsl_110.frag"),
-            ),
             GlSlEs300 => (
                 include_bytes!("shader/glsles_300.vert"),
                 include_bytes!("shader/glsles_300.frag"),
-            ),
-            GlSlEs100 => (
-                include_bytes!("shader/glsles_100.vert"),
-                include_bytes!("shader/glsles_100.frag"),
             ),
             HlslSm40 => (
                 include_bytes!("data/pixel.fx"),
@@ -184,8 +144,7 @@ pub struct Renderer<R: Resources> {
     bundle: Bundle<R, pipe::Data<R>>,
     index_buffer: Buffer<R, u16>,
     textures: Textures<Texture<R>>,
-    #[cfg(feature = "directx")]
-    constants: Buffer<R, constants::Constants>,
+    constants: Buffer<R, Constants>,
 }
 
 impl<R: Resources> Renderer<R> {
@@ -242,7 +201,6 @@ impl<R: Resources> Renderer<R> {
             },
             index_buffer,
             textures,
-            #[cfg(feature = "directx")]
             constants: factory.create_constant_buffer(1),
         })
     }
@@ -324,17 +282,10 @@ impl<R: Resources> Renderer<R> {
                     .round() as u16,
             };
 
-            #[cfg(feature = "directx")]
-            {
-                let constants = constants::Constants { matrix: *matrix };
-                encoder.update_constant_buffer(&self.constants, &constants);
-            }
+            encoder.update_constant_buffer(&self.constants, &Constants { matrix: *matrix });
 
             let data = pipe::BorrowedData {
                 vertex_buffer: &self.bundle.vertex_buffer,
-                #[cfg(not(feature = "directx"))]
-                matrix,
-                #[cfg(feature = "directx")]
                 constants: &self.constants,
                 tex,
                 out: &self.bundle.out,

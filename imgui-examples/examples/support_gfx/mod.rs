@@ -27,7 +27,7 @@ pub fn run<F: FnMut(&Ui) -> bool>(title: String, clear_color: [f32; 4], mut run_
             if version.major >= 3 {
                 Shaders::GlSlEs300
             } else {
-                Shaders::GlSlEs100
+                panic!("version < ES 3.0 unsupported");
             }
         } else if version.major >= 4 {
             Shaders::GlSl400
@@ -35,10 +35,10 @@ pub fn run<F: FnMut(&Ui) -> bool>(title: String, clear_color: [f32; 4], mut run_
             if version.minor >= 2 {
                 Shaders::GlSl150
             } else {
-                Shaders::GlSl130
+                panic!("version < 3.2 unsupported");
             }
         } else {
-            Shaders::GlSl110
+            panic!("version < 3.2 unsupported");
         }
     };
 
