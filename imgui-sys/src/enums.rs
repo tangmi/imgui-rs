@@ -397,3 +397,52 @@ impl ImGuiStyleVar {
         ImGuiStyleVar::ButtonTextAlign,
     ];
 }
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ImGuiTabBarFlags {
+    None = 0,
+    Reorderable = 1,
+    AutoSelectNewTabs = 2,
+    TabListPopupButton = 4,
+    NoCloseWithMiddleMouseButton = 8,
+    NoTabListScrollingButtons = 16,
+    NoTooltip = 32,
+    /// Default
+    FittingPolicyResizeDown = 64,
+    FittingPolicyScroll = 128,
+    FittingPolicyMask_ = 192,
+}
+impl ImGuiTabBarFlags {
+    pub const VARIANTS: [ImGuiTabBarFlags; 10] = [
+        ImGuiTabBarFlags::None,
+        ImGuiTabBarFlags::Reorderable,
+        ImGuiTabBarFlags::AutoSelectNewTabs,
+        ImGuiTabBarFlags::TabListPopupButton,
+        ImGuiTabBarFlags::NoCloseWithMiddleMouseButton,
+        ImGuiTabBarFlags::NoTabListScrollingButtons,
+        ImGuiTabBarFlags::NoTooltip,
+        ImGuiTabBarFlags::FittingPolicyResizeDown,
+        ImGuiTabBarFlags::FittingPolicyScroll,
+        ImGuiTabBarFlags::FittingPolicyMask_,
+    ];
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ImGuiTabItemFlags {
+    None = 0,
+    UnsavedDocument = 1,
+    SetSelected = 2,
+    NoCloseWithMiddleMouseButton = 4,
+    NoPushId = 8,
+}
+impl ImGuiTabItemFlags {
+    pub const VARIANTS: [ImGuiTabItemFlags; 5] = [
+        ImGuiTabItemFlags::None,
+        ImGuiTabItemFlags::UnsavedDocument,
+        ImGuiTabItemFlags::SetSelected,
+        ImGuiTabItemFlags::NoCloseWithMiddleMouseButton,
+        ImGuiTabItemFlags::NoPushId,
+    ];
+}
