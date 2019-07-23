@@ -2,6 +2,8 @@ pub extern crate gfx;
 pub extern crate imgui;
 
 use gfx::format::BlendFormat;
+use gfx::gfx_constant_struct_meta;
+use gfx::gfx_impl_struct_meta;
 use gfx::handle::{Buffer, RenderTargetView};
 use gfx::memory::Bind;
 use gfx::pso::PipelineState;
@@ -79,14 +81,8 @@ pub enum Shaders {
     GlSl400,
     /// OpenGL 3.2+
     GlSl150,
-    /// OpenGL 3.0+
-    GlSl130,
-    /// OpenGL 2.0+
-    GlSl110,
     /// OpenGL ES 3.0+
     GlSlEs300,
-    /// OpenGL ES 2.0+
-    GlSlEs100,
     /// HLSL Shader Model 4.0+
     HlslSm40,
 }
@@ -103,21 +99,9 @@ impl Shaders {
                 include_bytes!("shader/glsl_150.vert"),
                 include_bytes!("shader/glsl_150.frag"),
             ),
-            GlSl130 => (
-                include_bytes!("shader/glsl_130.vert"),
-                include_bytes!("shader/glsl_130.frag"),
-            ),
-            GlSl110 => (
-                include_bytes!("shader/glsl_110.vert"),
-                include_bytes!("shader/glsl_110.frag"),
-            ),
             GlSlEs300 => (
                 include_bytes!("shader/glsles_300.vert"),
                 include_bytes!("shader/glsles_300.frag"),
-            ),
-            GlSlEs100 => (
-                include_bytes!("shader/glsles_100.vert"),
-                include_bytes!("shader/glsles_100.frag"),
             ),
             HlslSm40 => (
                 include_bytes!("data/vertex.fx"),
@@ -139,8 +123,7 @@ pub struct Renderer<Cf: BlendFormat, R: Resources> {
     pso: PipelineState<R, pipeline::Meta<Cf>>,
     font_texture: Texture<R>,
     textures: Textures<Texture<R>>,
-    #[cfg(feature = "directx")]
-    constants: Buffer<R, constants::Constants>,
+    constants: Buffer<R, Constants>,
 }
 
 impl<Cf, R> Renderer<Cf, R>
@@ -186,7 +169,6 @@ where
             pso,
             font_texture,
             textures: Textures::new(),
-            #[cfg(feature = "directx")]
             constants: factory.create_constant_buffer(1),
         })
     }
@@ -266,16 +248,10 @@ where
                                 h: (clip_rect[3] - clip_rect[1]).abs().ceil() as u16,
                             };
                             let tex = self.lookup_texture(texture_id)?;
-                            #[cfg(feature = "directx")]
-                            {
-                                let constants = constants::Constants { matrix };
-                                encoder.update_constant_buffer(&self.constants, &constants);
-                            }
+                            let constants = Constants { matrix };
+                            encoder.update_constant_buffer(&self.constants, &constants);
                             let data = pipeline::Data {
                                 vertex_buffer: &self.vertex_buffer,
-                                #[cfg(not(feature = "directx"))]
-                                matrix: &matrix,
-                                #[cfg(feature = "directx")]
                                 constants: &self.constants,
                                 tex,
                                 scissor: &scissor,
@@ -360,16 +336,10 @@ fn upload_font_texture<R: Resources, F: Factory<R>>(
     Ok(font_texture)
 }
 
-#[cfg(feature = "directx")]
-mod constants {
-    use gfx::gfx_constant_struct_meta;
-    use gfx::gfx_impl_struct_meta;
-
-    gfx::gfx_constant_struct! {
-        Constants {
-            // `matrix` is a reserved keyword in HLSL
-            matrix: [[f32; 4]; 4] = "matrix_",
-        }
+gfx::gfx_constant_struct! {
+    Constants {
+        // `matrix` is a reserved keyword in HLSL
+        matrix: [[f32; 4]; 4] = "transform",
     }
 }
 
@@ -393,10 +363,7 @@ mod pipeline {
     #[derive(Clone, Debug, PartialEq)]
     pub struct Data<'a, R: Resources, Cf: BlendFormat + 'a> {
         pub vertex_buffer: &'a <gfx::VertexBuffer<DrawVert> as DataBind<R>>::Data,
-        #[cfg(not(feature = "directx"))]
-        pub matrix: &'a <gfx::Global<[[f32; 4]; 4]> as DataBind<R>>::Data,
-        #[cfg(feature = "directx")]
-        pub constants: &'a <gfx::ConstantBuffer<super::constants::Constants> as DataBind<R>>::Data,
+        pub constants: &'a <gfx::ConstantBuffer<super::Constants> as DataBind<R>>::Data,
         pub tex: &'a <gfx::TextureSampler<[f32; 4]> as DataBind<R>>::Data,
         pub target: &'a <gfx::BlendTarget<Cf> as DataBind<R>>::Data,
         pub scissor: &'a <gfx::Scissor as DataBind<R>>::Data,
@@ -405,10 +372,7 @@ mod pipeline {
     #[derive(Clone, Debug, Hash, PartialEq)]
     pub struct Meta<Cf: BlendFormat> {
         vertex_buffer: gfx::VertexBuffer<DrawVert>,
-        #[cfg(not(feature = "directx"))]
-        matrix: gfx::Global<[[f32; 4]; 4]>,
-        #[cfg(feature = "directx")]
-        constants: gfx::ConstantBuffer<super::constants::Constants>,
+        constants: gfx::ConstantBuffer<super::Constants>,
         tex: gfx::TextureSampler<[f32; 4]>,
         target: gfx::BlendTarget<Cf>,
         scissor: gfx::Scissor,
@@ -417,10 +381,7 @@ mod pipeline {
     #[derive(Clone, Debug, PartialEq)]
     pub struct Init<'a, Cf: BlendFormat> {
         vertex_buffer: <gfx::VertexBuffer<DrawVert> as DataLink<'a>>::Init,
-        #[cfg(not(feature = "directx"))]
-        matrix: <gfx::Global<[[f32; 4]; 4]> as DataLink<'a>>::Init,
-        #[cfg(feature = "directx")]
-        constants: <gfx::ConstantBuffer<super::constants::Constants> as DataLink<'a>>::Init,
+        constants: <gfx::ConstantBuffer<super::Constants> as DataLink<'a>>::Init,
         tex: <gfx::TextureSampler<[f32; 4]> as DataLink<'a>>::Init,
         target: <gfx::BlendTarget<Cf> as DataLink<'a>>::Init,
         scissor: <gfx::Scissor as DataLink<'a>>::Init,
@@ -435,9 +396,6 @@ mod pipeline {
         ) -> Result<Meta<Cf>, InitError<&'s str>> {
             let mut meta = Meta {
                 vertex_buffer: DataLink::new(),
-                #[cfg(not(feature = "directx"))]
-                matrix: DataLink::new(),
-                #[cfg(feature = "directx")]
                 constants: DataLink::new(),
                 tex: DataLink::new(),
                 target: DataLink::new(),
@@ -461,7 +419,6 @@ mod pipeline {
                     None => return Err(InitError::VertexImport(&at.name, None)),
                 }
             }
-            #[cfg(feature = "directx")]
             for cb in &info.constant_buffers {
                 match meta.constants.link_constant_buffer(cb, &self.constants) {
                     Some(Ok(d)) => {
@@ -470,14 +427,6 @@ mod pipeline {
                     }
                     Some(Err(e)) => return Err(InitError::ConstantBuffer(&cb.name, Some(e))),
                     None => return Err(InitError::ConstantBuffer(&cb.name, None)),
-                }
-            }
-            #[cfg(not(feature = "directx"))]
-            for gc in &info.globals {
-                match meta.matrix.link_global_constant(gc, &self.matrix) {
-                    Some(Ok(())) => assert!(meta.matrix.is_active()),
-                    Some(Err(e)) => return Err(InitError::GlobalConstant(&gc.name, Some(e))),
-                    None => return Err(InitError::GlobalConstant(&gc.name, None)),
                 }
             }
             for srv in &info.textures {
@@ -546,14 +495,7 @@ mod pipeline {
         ) {
             meta.vertex_buffer
                 .bind_to(out, self.vertex_buffer, man, access);
-            #[cfg(not(feature = "directx"))]
-            {
-                meta.matrix.bind_to(out, self.matrix, man, access);
-            }
-            #[cfg(feature = "directx")]
-            {
-                meta.constants.bind_to(out, self.constants, man, access);
-            }
+            meta.constants.bind_to(out, self.constants, man, access);
             meta.tex.bind_to(out, self.tex, man, access);
             meta.target.bind_to(out, self.target, man, access);
             meta.scissor.bind_to(out, self.scissor, man, access);
@@ -563,9 +505,6 @@ mod pipeline {
     pub fn new<Cf: BlendFormat>() -> Init<'static, Cf> {
         Init {
             vertex_buffer: (),
-            #[cfg(not(feature = "directx"))]
-            matrix: "matrix",
-            #[cfg(feature = "directx")]
             constants: "Constants",
             tex: "tex",
             target: ("Target0", ColorMask::all(), blend::ALPHA),

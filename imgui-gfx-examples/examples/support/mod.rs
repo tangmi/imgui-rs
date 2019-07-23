@@ -166,7 +166,7 @@ impl RenderSystem {
                 if version.major >= 3 {
                     Shaders::GlSlEs300
                 } else {
-                    Shaders::GlSlEs100
+                    panic!("version < 3.2 unsupported");
                 }
             } else if version.major >= 4 {
                 Shaders::GlSl400
@@ -174,10 +174,10 @@ impl RenderSystem {
                 if version.minor >= 2 {
                     Shaders::GlSl150
                 } else {
-                    Shaders::GlSl130
+                    panic!("version < 3.2 unsupported");
                 }
             } else {
-                Shaders::GlSl110
+                panic!("version < 3.2 unsupported");
             }
         };
         let renderer =

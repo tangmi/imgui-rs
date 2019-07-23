@@ -1,5 +1,5 @@
 cbuffer Constants : register(b0) {
-  float4x4 matrix_;
+  float4x4 transform;
 }
 
 Texture2D tex;
@@ -21,7 +21,7 @@ struct VOut
 VOut VertexMain(VIn vertex)
 {
   VOut output;
-  output.position = mul(matrix_, float4(vertex.position, 0.0, 1.0));
+  output.position = mul(transform, float4(vertex.position, 0.0, 1.0));
   output.uv = vertex.uv;
   output.color = vertex.color;
 
