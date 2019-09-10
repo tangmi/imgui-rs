@@ -1,5 +1,5 @@
 use gfx::Device;
-use glutin::{Event, WindowEvent};
+use glutin::event::{Event, WindowEvent};
 use imgui::{Context, FontConfig, FontGlyphRanges, FontSource, Ui};
 use imgui_gfx_renderer::{Renderer, Shaders};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
@@ -8,7 +8,7 @@ use std::time::Instant;
 type ColorFormat = gfx::format::Rgba8;
 
 pub struct System {
-    pub events_loop: glutin::EventsLoop,
+    pub event_loop: glutin::event_loop::EventLoop<()>,
     pub imgui: Context,
     pub platform: WinitPlatform,
     pub render_sys: RenderSystem,
@@ -20,10 +20,10 @@ pub fn init(title: &str) -> System {
         Some(idx) => title.split_at(idx + 1).1,
         None => title,
     };
-    let events_loop = glutin::EventsLoop::new();
-    let builder = glutin::WindowBuilder::new()
+    let event_loop = glutin::event_loop::EventLoop::new();
+    let builder = glutin::window::WindowBuilder::new()
         .with_title(title.to_owned())
-        .with_dimensions(glutin::dpi::LogicalSize::new(1024f64, 768f64));
+        .with_inner_size(glutin::dpi::LogicalSize::new(1024f64, 768f64));
 
     let mut imgui = Context::create();
     imgui.set_ini_filename(None);
@@ -52,10 +52,10 @@ pub fn init(title: &str) -> System {
 
     imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
 
-    let render_sys = RenderSystem::init(&mut imgui, builder, &events_loop);
+    let render_sys = RenderSystem::init(&mut imgui, builder, &event_loop);
     platform.attach_window(imgui.io_mut(), render_sys.window(), HiDpiMode::Rounded);
     System {
-        events_loop,
+        event_loop,
         imgui,
         platform,
         render_sys,
@@ -64,9 +64,9 @@ pub fn init(title: &str) -> System {
 }
 
 impl System {
-    pub fn main_loop<F: FnMut(&mut bool, &mut Ui)>(self, mut run_ui: F) {
+    pub fn main_loop<F: FnMut(&mut bool, &mut Ui) + 'static>(self, mut run_ui: F) {
         let System {
-            mut events_loop,
+            event_loop,
             mut imgui,
             mut platform,
             mut render_sys,
@@ -77,42 +77,53 @@ impl System {
         let mut last_frame = Instant::now();
         let mut run = true;
 
-        while run {
-            events_loop.poll_events(|event| {
-                platform.handle_event(imgui.io_mut(), render_sys.window(), &event);
+        event_loop.run(move |event, _target, control_flow| {
+            platform.handle_event(imgui.io_mut(), render_sys.window(), &event);
 
-                if let Event::WindowEvent { event, .. } = event {
+            match event {
+                Event::WindowEvent { event, .. } => {                    
                     match event {
                         WindowEvent::Resized(size) => render_sys.update_views(size),
                         WindowEvent::CloseRequested => run = false,
+                        WindowEvent::RedrawRequested => {
+                            let io = imgui.io_mut();
+                            platform
+                                .prepare_frame(io, render_sys.window())
+                                .expect("Failed to start frame");
+                            last_frame = io.update_delta_time(last_frame);
+                            let mut ui = imgui.frame();
+                            run_ui(&mut run, &mut ui);
+
+                            if let Some(main_color) = render_sys.main_color.as_mut() {
+                                encoder.clear(main_color, [1.0, 1.0, 1.0, 1.0]);
+                            }
+                            platform.prepare_render(&ui, render_sys.window());
+                            let draw_data = ui.render();
+                            if let Some(main_color) = render_sys.main_color.as_mut() {
+                                render_sys
+                                    .renderer
+                                    .render(&mut render_sys.factory, &mut encoder, main_color, draw_data)
+                                    .expect("Rendering failed");
+                            }
+                            encoder.flush(&mut render_sys.device);
+                            render_sys.swap_buffers();
+                            render_sys.device.cleanup();
+                        }
                         _ => (),
                     }
                 }
-            });
 
-            let io = imgui.io_mut();
-            platform
-                .prepare_frame(io, render_sys.window())
-                .expect("Failed to start frame");
-            last_frame = io.update_delta_time(last_frame);
-            let mut ui = imgui.frame();
-            run_ui(&mut run, &mut ui);
+                Event::EventsCleared => {
+                    render_sys.window().request_redraw();
+                }
 
-            if let Some(main_color) = render_sys.main_color.as_mut() {
-                encoder.clear(main_color, [1.0, 1.0, 1.0, 1.0]);
+                _ => (),
             }
-            platform.prepare_render(&ui, render_sys.window());
-            let draw_data = ui.render();
-            if let Some(main_color) = render_sys.main_color.as_mut() {
-                render_sys
-                    .renderer
-                    .render(&mut render_sys.factory, &mut encoder, main_color, draw_data)
-                    .expect("Rendering failed");
+
+            if !run {
+                *control_flow = glutin::event_loop::ControlFlow::Exit;
             }
-            encoder.flush(&mut render_sys.device);
-            render_sys.swap_buffers();
-            render_sys.device.cleanup();
-        }
+        });
     }
 }
 
@@ -137,8 +148,8 @@ pub struct RenderSystem {
 impl RenderSystem {
     pub fn init(
         imgui: &mut Context,
-        builder: glutin::WindowBuilder,
-        events_loop: &glutin::EventsLoop,
+        builder: glutin::window::WindowBuilder,
+        event_loop: &glutin::event_loop::EventLoop<()>,
     ) -> RenderSystem {
         {
             // Fix incorrect colors with sRGB framebuffer
@@ -158,7 +169,7 @@ impl RenderSystem {
 
         let context = glutin::ContextBuilder::new().with_vsync(true);
         let (windowed_context, device, mut factory, main_color, main_depth) =
-            gfx_window_glutin::init(builder, context, &events_loop)
+            gfx_window_glutin::init(builder, context, &event_loop)
                 .expect("Failed to initialize graphics");
         let shaders = {
             let version = device.get_info().shading_language;
@@ -191,7 +202,7 @@ impl RenderSystem {
             main_depth,
         }
     }
-    pub fn window(&self) -> &glutin::Window {
+    pub fn window(&self) -> &glutin::window::Window {
         self.windowed_context.window()
     }
     pub fn update_views(&mut self, _: glutin::dpi::LogicalSize) {
@@ -228,11 +239,11 @@ pub struct RenderSystem {
 impl RenderSystem {
     pub fn init(
         imgui: &mut Context,
-        builder: glutin::WindowBuilder,
-        events_loop: &glutin::EventsLoop,
+        builder: glutin::window::WindowBuilder,
+        event_loop: &glutin::event_loop::EventLoop,
     ) -> RenderSystem {
         let (window, device, mut factory, main_color) =
-            gfx_window_dxgi::init(builder, &events_loop).expect("Failed to initialize graphics");
+            gfx_window_dxgi::init(builder, &event_loop).expect("Failed to initialize graphics");
         let renderer = Renderer::init(imgui, &mut factory, Shaders::HlslSm40)
             .expect("Failed to initialize renderer");
         RenderSystem {
@@ -243,7 +254,7 @@ impl RenderSystem {
             main_color: Some(main_color),
         }
     }
-    pub fn window(&self) -> &glutin::Window {
+    pub fn window(&self) -> &glutin::window::Window {
         &self.window.inner
     }
     pub fn update_views(&mut self, size: glutin::dpi::LogicalSize) {
